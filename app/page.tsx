@@ -8,6 +8,7 @@ const sections = [
   "오프닝 훅",
   "쇼츠 대본",
   "씬 분할",
+  "이미지/영상 활용안",
   "BGM 추천",
   "자막 스타일",
 ];
@@ -37,11 +38,7 @@ type HistoryItem = {
 };
 
 function extractSection(text: string, title: string) {
-  const pattern = new RegExp(
-    `\\[${title}\\]\\s*([\\s\\S]*?)(?=\\n\\[|$)`,
-    "i"
-  );
-
+  const pattern = new RegExp(`\\[${title}\\]\\s*([\\s\\S]*?)(?=\\n\\[|$)`, "i");
   const match = text.match(pattern);
   return match ? match[1].trim() : "";
 }
@@ -54,23 +51,69 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
 
+  const [imagePreview, setImagePreview] = useState("");
+  const [imageBase64, setImageBase64] = useState("");
+  const [imageType, setImageType] = useState("");
+
+  const [videoPreview, setVideoPreview] = useState("");
+  const [videoName, setVideoName] = useState("");
+
   useEffect(() => {
     const saved = localStorage.getItem("shortslab-history");
-
-    if (saved) {
-      setHistory(JSON.parse(saved));
-    }
+    if (saved) setHistory(JSON.parse(saved));
   }, []);
 
   const saveHistory = (newItem: HistoryItem) => {
     const nextHistory = [newItem, ...history].slice(0, 10);
-
     setHistory(nextHistory);
     localStorage.setItem("shortslab-history", JSON.stringify(nextHistory));
   };
 
+  const handleImageUpload = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      alert("이미지 파일만 업로드할 수 있어요.");
+      return;
+    }
+
+    if (file.size > 4 * 1024 * 1024) {
+      alert("이미지는 4MB 이하로 올려주세요.");
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.split(",")[1];
+
+      setImagePreview(result);
+      setImageBase64(base64);
+      setImageType(file.type);
+    };
+
+    reader.readAsDataURL(file);
+  };
+
+  const handleVideoUpload = (file: File) => {
+    if (!file.type.startsWith("video/")) {
+      alert("영상 파일만 업로드할 수 있어요.");
+      return;
+    }
+
+    if (file.size > 50 * 1024 * 1024) {
+      alert("영상은 우선 50MB 이하만 업로드해주세요.");
+      return;
+    }
+
+    const url = URL.createObjectURL(file);
+    setVideoPreview(url);
+    setVideoName(file.name);
+  };
+
   const generateScript = async () => {
-    if (!topic.trim()) return alert("주제를 입력해주세요.");
+    if (!topic.trim() && !imageBase64 && !videoPreview) {
+      return alert("주제를 입력하거나 이미지/영상을 업로드해주세요.");
+    }
 
     setLoading(true);
     setResult("");
@@ -79,7 +122,14 @@ export default function Home() {
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic, genre, platform }),
+        body: JSON.stringify({
+          topic,
+          genre,
+          platform,
+          imageBase64,
+          imageType,
+          videoName,
+        }),
       });
 
       const data = await response.json();
@@ -89,7 +139,7 @@ export default function Home() {
 
       saveHistory({
         id: Date.now(),
-        topic,
+        topic: topic || imageBase64 ? topic || "자료 기반 쇼츠" : "영상 기반 쇼츠",
         genre,
         platform,
         result: generated,
@@ -117,7 +167,6 @@ export default function Home() {
 
   const deleteHistory = (id: number) => {
     const nextHistory = history.filter((item) => item.id !== id);
-
     setHistory(nextHistory);
     localStorage.setItem("shortslab-history", JSON.stringify(nextHistory));
   };
@@ -128,7 +177,7 @@ export default function Home() {
         <header className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-black tracking-tight">쇼츠랩 AI</h1>
-            <p className="text-sm text-black/45">AI Shorts Generator</p>
+            <p className="text-sm text-black/45">AI Shorts Studio</p>
           </div>
 
           <button className="rounded-full bg-black px-5 py-2 text-sm font-bold text-white">
@@ -138,28 +187,25 @@ export default function Home() {
 
         <section className="flex flex-1 flex-col items-center justify-center py-16 text-center">
           <div className="mb-5 rounded-full bg-black px-4 py-2 text-sm font-bold text-white">
-            AI 쇼츠 대본 생성기
+            AI 쇼츠 제작 스튜디오
           </div>
 
           <h2 className="max-w-4xl text-5xl font-black leading-tight tracking-[-0.05em] md:text-7xl">
-            플랫폼에 맞는
+            주제와 자료를 바탕으로
             <br />
-            쇼츠 대본을
+            쇼츠 기획안을
             <br />
-            AI로 빠르게 생성하세요.
+            AI가 만들어드립니다.
           </h2>
 
           <p className="mt-8 max-w-2xl text-xl leading-9 text-black/55">
-            유튜브 쇼츠, 틱톡, 인스타 릴스에 맞게 제목, 대본,
-            씬 분할, BGM 추천까지 한 번에 생성합니다.
+            이미지, 영상, 장르, 플랫폼을 참고해 제목, 대본, 씬 분할,
+            이미지/영상 활용안까지 생성합니다.
           </p>
 
           <div className="mt-12 w-full max-w-3xl rounded-[32px] bg-white p-5 shadow-xl shadow-black/5">
             <div className="mb-5 text-left">
-              <p className="mb-3 text-sm font-black text-black/40">
-                플랫폼 선택
-              </p>
-
+              <p className="mb-3 text-sm font-black text-black/40">플랫폼 선택</p>
               <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
                 {platforms.map((item) => (
                   <button
@@ -178,10 +224,7 @@ export default function Home() {
             </div>
 
             <div className="mb-5 text-left">
-              <p className="mb-3 text-sm font-black text-black/40">
-                장르 선택
-              </p>
-
+              <p className="mb-3 text-sm font-black text-black/40">장르 선택</p>
               <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
                 {genres.map((item) => (
                   <button
@@ -199,6 +242,93 @@ export default function Home() {
               </div>
             </div>
 
+            <div className="mb-5 grid gap-4 text-left md:grid-cols-2">
+              <div>
+                <p className="mb-3 text-sm font-black text-black/40">이미지 업로드</p>
+                <label className="flex min-h-56 cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed border-black/10 bg-[#F5F5F7] p-5 text-center transition hover:border-black/30">
+                  {imagePreview ? (
+                    <img
+                      src={imagePreview}
+                      alt="업로드 이미지"
+                      className="max-h-56 rounded-2xl object-cover"
+                    />
+                  ) : (
+                    <>
+                      <p className="text-lg font-black">이미지 업로드</p>
+                      <p className="mt-2 text-sm text-black/45">
+                        사진 분위기를 참고합니다.
+                      </p>
+                    </>
+                  )}
+
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleImageUpload(file);
+                    }}
+                  />
+                </label>
+
+                {imagePreview && (
+                  <button
+                    onClick={() => {
+                      setImagePreview("");
+                      setImageBase64("");
+                      setImageType("");
+                    }}
+                    className="mt-3 rounded-2xl bg-[#F5F5F7] px-4 py-2 text-sm font-bold text-black/50 hover:bg-black hover:text-white"
+                  >
+                    이미지 삭제
+                  </button>
+                )}
+              </div>
+
+              <div>
+                <p className="mb-3 text-sm font-black text-black/40">영상 업로드</p>
+                <label className="flex min-h-56 cursor-pointer flex-col items-center justify-center rounded-3xl border-2 border-dashed border-black/10 bg-[#F5F5F7] p-5 text-center transition hover:border-black/30">
+                  {videoPreview ? (
+                    <video
+                      src={videoPreview}
+                      controls
+                      className="max-h-56 rounded-2xl"
+                    />
+                  ) : (
+                    <>
+                      <p className="text-lg font-black">영상 업로드</p>
+                      <p className="mt-2 text-sm text-black/45">
+                        원본 영상 기반 제작 준비.
+                      </p>
+                    </>
+                  )}
+
+                  <input
+                    type="file"
+                    accept="video/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleVideoUpload(file);
+                    }}
+                  />
+                </label>
+
+                {videoPreview && (
+                  <button
+                    onClick={() => {
+                      setVideoPreview("");
+                      setVideoName("");
+                    }}
+                    className="mt-3 rounded-2xl bg-[#F5F5F7] px-4 py-2 text-sm font-bold text-black/50 hover:bg-black hover:text-white"
+                  >
+                    영상 삭제
+                  </button>
+                )}
+              </div>
+            </div>
+
             <textarea
               value={topic}
               onChange={(e) => setTopic(e.target.value)}
@@ -211,12 +341,12 @@ export default function Home() {
               disabled={loading}
               className="mt-4 w-full rounded-3xl bg-black px-6 py-5 text-xl font-black text-white transition hover:bg-neutral-800 disabled:opacity-50"
             >
-              {loading ? "AI가 쇼츠 생성 중..." : "쇼츠 대본 생성하기"}
+              {loading ? "AI가 쇼츠 생성 중..." : "쇼츠 기획안 생성하기"}
             </button>
           </div>
 
           <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
-            {["플랫폼 최적화", "장르 선택", "AI 자동 생성", "씬 분할"].map(
+            {["플랫폼 최적화", "장르 선택", "이미지 기반", "영상 업로드"].map(
               (item) => (
                 <div
                   key={item}
@@ -227,25 +357,6 @@ export default function Home() {
               )
             )}
           </div>
-
-          <div className="mt-14 w-full max-w-3xl rounded-[32px] bg-black p-7 text-left text-white shadow-xl">
-            <p className="text-sm font-bold text-white/50">SHORTSLAB PRO</p>
-
-            <h3 className="mt-3 text-3xl font-black leading-snug">
-              더 강력한 기능이
-              <br />
-              곧 추가됩니다.
-            </h3>
-
-            <p className="mt-4 leading-8 text-white/65">
-              AI 더빙, 자동 자막, 조회수 분석,
-              쇼츠 템플릿 추천 기능을 준비 중입니다.
-            </p>
-
-            <button className="mt-6 rounded-2xl bg-white px-5 py-4 font-black text-black">
-              출시 알림 받기
-            </button>
-          </div>
         </section>
 
         {loading && (
@@ -253,15 +364,11 @@ export default function Home() {
             <div className="rounded-[36px] bg-white p-7 shadow-xl shadow-black/5">
               <p className="text-sm font-bold text-black/40">GENERATING</p>
               <h3 className="mt-2 text-3xl font-black">
-                AI가 플랫폼에 맞는 쇼츠 구성을 만들고 있어요
+                AI가 자료를 바탕으로 쇼츠 구성을 만들고 있어요
               </h3>
-
               <div className="mt-6 space-y-4">
                 {[1, 2, 3].map((item) => (
-                  <div
-                    key={item}
-                    className="h-20 animate-pulse rounded-3xl bg-[#F5F5F7]"
-                  />
+                  <div key={item} className="h-20 animate-pulse rounded-3xl bg-[#F5F5F7]" />
                 ))}
               </div>
             </div>
@@ -289,17 +396,12 @@ export default function Home() {
             <div className="grid gap-5">
               {sections.map((section) => {
                 const content = extractSection(result, section);
-
                 if (!content) return null;
 
                 return (
-                  <div
-                    key={section}
-                    className="rounded-[28px] bg-white p-6 shadow-xl shadow-black/5"
-                  >
+                  <div key={section} className="rounded-[28px] bg-white p-6 shadow-xl shadow-black/5">
                     <div className="mb-4 flex items-center justify-between gap-4">
                       <h4 className="text-2xl font-black">{section}</h4>
-
                       <button
                         onClick={() => copyText(content)}
                         className="rounded-xl bg-[#F5F5F7] px-4 py-2 text-sm font-bold text-black/55 hover:bg-black hover:text-white"
@@ -334,8 +436,7 @@ export default function Home() {
                   <button onClick={() => loadHistory(item)} className="text-left">
                     <p className="text-lg font-black">{item.topic}</p>
                     <p className="mt-1 text-sm text-black/40">
-                      {item.platform || "유튜브 쇼츠"} · {item.genre} ·{" "}
-                      {item.createdAt}
+                      {item.platform || "유튜브 쇼츠"} · {item.genre} · {item.createdAt}
                     </p>
                   </button>
 
