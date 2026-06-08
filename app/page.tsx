@@ -4,7 +4,14 @@ import { toPng } from "html-to-image";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type Platform = "youtube" | "tiktok" | "instagram";
-type Genre = "horror" | "info" | "romance" | "story" | "money" | "daily" | "vlog";
+type Genre =
+  | "horror"
+  | "info"
+  | "romance"
+  | "story"
+  | "money"
+  | "daily"
+  | "vlog";
 
 type CaptionPosition = "top" | "upper" | "middle" | "lower" | "bottom";
 type CaptionSize = "small" | "medium" | "large";
@@ -154,10 +161,13 @@ const defaultThumbnail: ThumbnailSettings = {
 
 const panelClass =
   "rounded-[28px] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/30 backdrop-blur";
+
 const inputClass =
   "w-full rounded-2xl border border-white/10 bg-zinc-950/80 px-4 py-3 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-purple-400 focus:ring-2 focus:ring-purple-500/20";
+
 const selectClass =
   "w-full rounded-2xl border border-white/10 bg-zinc-950/80 px-4 py-3 text-sm text-white outline-none transition focus:border-purple-400 focus:ring-2 focus:ring-purple-500/20";
+
 const smallLabelClass = "text-xs font-semibold text-zinc-400";
 const sectionTitleClass = "text-base font-black text-white";
 
@@ -174,6 +184,7 @@ function recalcScenesByDuration(scenes: Scene[]) {
 
   return scenes.map((scene) => {
     const duration = getSceneDuration(scene);
+
     const nextScene = {
       ...scene,
       start: round1(cursor),
@@ -347,7 +358,7 @@ function StatusPill({
   tone = "purple",
 }: {
   children: React.ReactNode;
-  tone?: "purple" | "green" | "yellow" | "zinc" | "red";
+  tone?: "purple" | "green" | "yellow" | "zinc" | "red" | "blue";
 }) {
   const toneClass =
     tone === "green"
@@ -356,6 +367,8 @@ function StatusPill({
       ? "border-yellow-400/20 bg-yellow-400/10 text-yellow-200"
       : tone === "red"
       ? "border-red-400/20 bg-red-400/10 text-red-200"
+      : tone === "blue"
+      ? "border-sky-400/20 bg-sky-400/10 text-sky-200"
       : tone === "zinc"
       ? "border-white/10 bg-white/5 text-zinc-300"
       : "border-purple-400/20 bg-purple-400/10 text-purple-200";
@@ -408,7 +421,8 @@ export default function Home() {
 
   const [result, setResult] = useState<GeneratedShorts | null>(null);
   const [scenes, setScenes] = useState<Scene[]>([]);
-  const [thumbnail, setThumbnail] = useState<ThumbnailSettings>(defaultThumbnail);
+  const [thumbnail, setThumbnail] =
+    useState<ThumbnailSettings>(defaultThumbnail);
 
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -460,6 +474,11 @@ export default function Home() {
 
     return scenes[safeIndex] ?? scenes[0];
   }, [scenes, thumbnail.sceneIndex]);
+
+  const usedCredits = scenes.length > 0 ? 12 + scenes.length : 0;
+  const totalCredits = 100;
+  const remainingCredits = Math.max(totalCredits - usedCredits, 0);
+  const creditPercent = Math.min((remainingCredits / totalCredits) * 100, 100);
 
   useEffect(() => {
     if (!isPlaying) {
@@ -1114,42 +1133,144 @@ export default function Home() {
       <audio ref={bgmAudioRef} src={bgmUrl || undefined} loop />
       <audio ref={sfxAudioRef} src={sfxUrl || undefined} />
 
+      <nav className="sticky top-0 z-50 border-b border-white/10 bg-zinc-950/75 backdrop-blur-xl">
+        <div className="mx-auto flex h-16 w-full max-w-[1600px] items-center justify-between px-4 md:px-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-400 to-fuchsia-600 text-sm font-black shadow-lg shadow-purple-950/50">
+              SL
+            </div>
+
+            <div>
+              <p className="text-sm font-black leading-none">ShortsLab AI</p>
+              <p className="mt-1 text-[10px] font-bold text-zinc-500">
+                AI Shorts Production Studio
+              </p>
+            </div>
+          </div>
+
+          <div className="hidden items-center gap-1 lg:flex">
+            {["Studio", "Templates", "Pricing", "Guide", "Contact"].map(
+              (item) => (
+                <button
+                  key={item}
+                  className="rounded-full px-4 py-2 text-sm font-bold text-zinc-400 transition hover:bg-white/10 hover:text-white"
+                >
+                  {item}
+                </button>
+              )
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="hidden rounded-full border border-yellow-400/20 bg-yellow-400/10 px-3 py-2 text-xs font-black text-yellow-200 md:block">
+              {remainingCredits} Credits
+            </div>
+
+            <button className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-black text-white transition hover:bg-white/10">
+              로그인
+            </button>
+
+            <button className="rounded-full bg-white px-4 py-2 text-xs font-black text-zinc-950 transition hover:bg-zinc-200">
+              업그레이드
+            </button>
+          </div>
+        </div>
+      </nav>
+
       <section className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 px-4 py-5 md:px-6 md:py-6">
         <header className="rounded-[32px] border border-white/10 bg-white/[0.045] p-5 shadow-2xl shadow-black/40 backdrop-blur md:p-6">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-400 to-fuchsia-600 text-xl font-black shadow-lg shadow-purple-950/50">
-                SL
+          <div className="grid gap-5 xl:grid-cols-[1.25fr_0.75fr_0.75fr]">
+            <div>
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <StatusPill tone="purple">Creator Studio</StatusPill>
+                <StatusPill tone="blue">MVP Preview</StatusPill>
+                <StatusPill tone="zinc">9:16 Video</StatusPill>
               </div>
 
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h1 className="text-2xl font-black tracking-tight md:text-4xl">
-                    ShortsLab AI Studio
-                  </h1>
-                  <StatusPill tone="purple">Beta Studio</StatusPill>
-                </div>
-                <p className="mt-2 text-sm text-zinc-400">
-                  주제 입력부터 장면 편집, 썸네일, 오디오, MP4 렌더링까지 한 번에 관리합니다.
-                </p>
+              <h1 className="text-3xl font-black tracking-tight md:text-5xl">
+                AI로 쇼츠를 기획하고,
+                <br />
+                장면별로 편집하고, 영상으로 렌더링하세요.
+              </h1>
+
+              <p className="mt-4 max-w-2xl text-sm leading-6 text-zinc-400 md:text-base">
+                ShortsLab AI는 단순 대본 생성기가 아니라, 주제 입력부터 장면
+                구성, 썸네일, 배경, 오디오, MP4 렌더링까지 이어지는 AI 쇼츠
+                제작 스튜디오입니다.
+              </p>
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                <button
+                  onClick={handleGenerate}
+                  disabled={isGenerating}
+                  className="rounded-2xl bg-gradient-to-r from-purple-500 to-fuchsia-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-purple-950/40 transition hover:scale-[1.01] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isGenerating ? "AI 쇼츠 생성 중..." : "새 쇼츠 생성하기"}
+                </button>
+
+                <button className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-sm font-black text-white transition hover:bg-white/10">
+                  템플릿 둘러보기
+                </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 md:min-w-[420px]">
-              <div className="rounded-2xl border border-white/10 bg-black/30 p-3">
-                <p className="text-xs text-zinc-500">총 길이</p>
-                <p className="mt-1 text-lg font-black">{totalDuration}s</p>
+            <div className="rounded-[26px] border border-white/10 bg-black/25 p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-zinc-500">계정</p>
+                  <p className="mt-1 text-lg font-black">Guest Creator</p>
+                </div>
+                <StatusPill tone="zinc">Free Plan</StatusPill>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-black/30 p-3">
-                <p className="text-xs text-zinc-500">장면 수</p>
-                <p className="mt-1 text-lg font-black">{scenes.length}</p>
+
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <div className="rounded-2xl bg-white/[0.045] p-4">
+                  <p className="text-xs text-zinc-500">이번 달 생성</p>
+                  <p className="mt-1 text-2xl font-black">{scenes.length}</p>
+                </div>
+                <div className="rounded-2xl bg-white/[0.045] p-4">
+                  <p className="text-xs text-zinc-500">렌더링</p>
+                  <p className="mt-1 text-2xl font-black">
+                    {renderedVideoUrl ? 1 : 0}
+                  </p>
+                </div>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-black/30 p-3">
-                <p className="text-xs text-zinc-500">현재 장면</p>
-                <p className="mt-1 text-lg font-black">
-                  {scenes.length > 0 ? currentSceneIndex + 1 : 0}
+
+              <button className="mt-4 w-full rounded-2xl bg-white px-4 py-3 text-sm font-black text-zinc-950 transition hover:bg-zinc-200">
+                계정 설정
+              </button>
+            </div>
+
+            <div className="rounded-[26px] border border-yellow-400/20 bg-yellow-400/10 p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-yellow-200/70">
+                    크레딧
+                  </p>
+                  <p className="mt-1 text-3xl font-black text-yellow-100">
+                    {remainingCredits}
+                  </p>
+                </div>
+                <StatusPill tone="yellow">100 / 월</StatusPill>
+              </div>
+
+              <div className="mt-5">
+                <div className="h-3 overflow-hidden rounded-full bg-black/30">
+                  <div
+                    className="h-full rounded-full bg-yellow-300"
+                    style={{ width: `${creditPercent}%` }}
+                  />
+                </div>
+
+                <p className="mt-3 text-xs leading-5 text-yellow-100/80">
+                  AI 쇼츠 생성, AI 배경 생성, MP4 렌더링에 크레딧이 사용되는
+                  구조를 미리 보여주는 UI입니다.
                 </p>
               </div>
+
+              <button className="mt-4 w-full rounded-2xl bg-yellow-300 px-4 py-3 text-sm font-black text-zinc-950 transition hover:bg-yellow-200">
+                크레딧 충전
+              </button>
             </div>
           </div>
         </header>
@@ -1834,7 +1955,8 @@ export default function Home() {
                     <div>
                       <p className="font-black">Scene {index + 1}</p>
                       <p className="text-xs text-zinc-500">
-                        {scene.start}s ~ {scene.end}s · {getSceneDuration(scene)}초 ·{" "}
+                        {scene.start}s ~ {scene.end}s ·{" "}
+                        {getSceneDuration(scene)}초 ·{" "}
                         {getBackgroundTypeLabel(scene.backgroundType)}
                       </p>
                     </div>
@@ -1843,7 +1965,9 @@ export default function Home() {
                   <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => handleGenerateSingleSceneVisual(index)}
-                      disabled={isGeneratingVisuals || generatingSceneIndex !== null}
+                      disabled={
+                        isGeneratingVisuals || generatingSceneIndex !== null
+                      }
                       className="rounded-xl bg-purple-500 px-3 py-2 text-xs font-black text-white transition hover:bg-purple-400 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {generatingSceneIndex === index
@@ -2013,7 +2137,9 @@ export default function Home() {
                     </Field>
 
                     {scene.sceneImageName && (
-                      <StatusPill tone="purple">이미지: {scene.sceneImageName}</StatusPill>
+                      <StatusPill tone="purple">
+                        이미지: {scene.sceneImageName}
+                      </StatusPill>
                     )}
 
                     <Field label="이 장면 영상">
@@ -2038,7 +2164,9 @@ export default function Home() {
                     )}
 
                     {scene.sceneVideoName && (
-                      <StatusPill tone="purple">영상: {scene.sceneVideoName}</StatusPill>
+                      <StatusPill tone="purple">
+                        영상: {scene.sceneVideoName}
+                      </StatusPill>
                     )}
                   </div>
 
