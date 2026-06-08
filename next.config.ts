@@ -1,7 +1,15 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  serverExternalPackages: [
+    "@remotion/bundler",
+    "@remotion/renderer",
+    "@remotion/cli",
+    "@rspack/binding",
+    "@rspack/binding-darwin-arm64",
+    "@rspack/core",
+    "esbuild",
+  ],
 };
 
 export default nextConfig;
