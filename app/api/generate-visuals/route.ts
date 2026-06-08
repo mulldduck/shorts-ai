@@ -18,18 +18,25 @@ type BackgroundType =
   | "sceneImage"
   | "sceneVideo";
 
+type CaptionPosition = "top" | "upper" | "middle" | "lower" | "bottom";
+type CaptionSize = "small" | "medium" | "large";
+type CaptionColor = "white" | "yellow" | "red" | "purple";
+type CaptionBg = "none" | "dark";
+type SceneEffect = "zoom" | "shake" | "fade" | "slide" | "none";
+type SfxTiming = "sceneStart" | "impact" | "none";
+
 type Scene = {
   start: number;
   end: number;
   caption: string;
   subCaption: string;
   visual: string;
-  effect: string;
+  effect: SceneEffect;
   backgroundType: BackgroundType;
-  captionPosition: string;
-  captionSize: string;
-  captionColor: string;
-  captionBg: string;
+  captionPosition: CaptionPosition;
+  captionSize: CaptionSize;
+  captionColor: CaptionColor;
+  captionBg: CaptionBg;
   imageUrl?: string;
   sceneImageUrl?: string;
   sceneImageName?: string;
@@ -37,7 +44,7 @@ type Scene = {
   sceneVideoName?: string;
   sfxEnabled?: boolean;
   sfxLabel?: string;
-  sfxTiming?: string;
+  sfxTiming?: SfxTiming;
 };
 
 type RequestBody = {
@@ -46,9 +53,8 @@ type RequestBody = {
   sceneIndex?: number;
 };
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 function getGenreStyle(genre: Genre) {
   switch (genre) {
@@ -137,6 +143,13 @@ Important rules:
 `.trim();
 }
 
+function escapeSvgText(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 function makeFallbackSvg(scene: Scene, genre: Genre, index: number) {
   const genreColor =
     genre === "horror"
@@ -149,10 +162,7 @@ function makeFallbackSvg(scene: Scene, genre: Genre, index: number) {
       ? "#1d4ed8"
       : "#5b21b6";
 
-  const safeCaption = (scene.caption || `Scene ${index + 1}`)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  const safeCaption = escapeSvgText(scene.caption || `Scene ${index + 1}`);
 
   const svg = `
 <svg xmlns="http://www.w3.org/2000/svg" width="720" height="1280" viewBox="0 0 720 1280">
@@ -185,9 +195,16 @@ function makeFallbackSvg(scene: Scene, genre: Genre, index: number) {
 }
 
 async function generateImageUrl(scene: Scene, genre: Genre, index: number) {
-  if (!process.env.OPENAI_API_KEY) {
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
+    console.warn("OPENAI_API_KEY is missing. Using fallback SVG background.");
     return makeFallbackSvg(scene, genre, index);
   }
+
+  const openai = new OpenAI({
+    apiKey,
+  });
 
   const prompt = buildImagePrompt(scene, genre, index);
 
