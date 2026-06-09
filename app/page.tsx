@@ -37,6 +37,8 @@ type Scene = {
   imageUrl?: string;
   sceneImageUrl?: string;
   sceneImageName?: string;
+  videoClipStart?: number;
+  videoClipEnd?: number;
   sceneVideoUrl?: string;
   sceneVideoName?: string;
   sfxEnabled?: boolean;
@@ -334,6 +336,9 @@ export default function Home() {
 
   const [videoFileName, setVideoFileName] = useState("");
   const [videoPreviewUrl, setVideoPreviewUrl] = useState("");
+  const [cutTitle, setCutTitle] = useState("영상 컷 장면");
+  const [cutStart, setCutStart] = useState(0);
+  const [cutEnd, setCutEnd] = useState(3);
 
   const [bgmFileName, setBgmFileName] = useState("");
   const [bgmUrl, setBgmUrl] = useState("");
@@ -674,7 +679,48 @@ export default function Home() {
     link.href = dataUrl;
     link.click();
   }
+  function addVideoCutScene() {
+  if (!videoPreviewUrl) {
+    alert("먼저 공통 영상을 업로드해주세요.");
+    return;
+  }
 
+  if (cutEnd <= cutStart) {
+    alert("끝 시간은 시작 시간보다 커야 합니다.");
+    return;
+  }
+
+  const duration = round1(cutEnd - cutStart);
+  const last = scenes[scenes.length - 1];
+  const timelineStart = last ? last.end : 0;
+
+  const newScene: Scene = {
+    start: timelineStart,
+    end: round1(timelineStart + duration),
+    caption: cutTitle || "영상 컷 장면",
+    subCaption: `${cutStart}s ~ ${cutEnd}s`,
+    visual: `업로드 영상의 ${cutStart}s부터 ${cutEnd}s 구간을 사용하는 장면`,
+    effect: "zoom",
+    backgroundType: "sceneVideo",
+    captionPosition: "bottom",
+    captionSize: "medium",
+    captionColor: "white",
+    captionBg: "dark",
+    sceneVideoUrl: videoPreviewUrl,
+    sceneVideoName: videoFileName || "uploaded-video",
+    videoClipStart: cutStart,
+    videoClipEnd: cutEnd,
+    sfxEnabled: false,
+    sfxLabel: "",
+    sfxTiming: "none",
+  };
+
+  replaceScenes(
+    autoSortTimeline
+      ? recalcScenesByDuration([...scenes, newScene])
+      : [...scenes, newScene]
+  );
+}
   function addScene() {
     const last = scenes[scenes.length - 1];
     const start = last ? last.end : 0;
@@ -718,7 +764,57 @@ export default function Home() {
     if (scene.backgroundType === "uploadedVideo" && videoPreviewUrl) {
       return <video src={videoPreviewUrl} className="h-full w-full object-cover" autoPlay muted loop playsInline />;
     }
+    {videoPreviewUrl && (
+  <div className="rounded-3xl border border-purple-400/20 bg-purple-400/10 p-4">
+    <div className="mb-3">
+      <p className="font-black text-purple-100">영상 컷 만들기</p>
+      <p className="mt-1 text-xs text-purple-200/70">
+        업로드한 영상의 시작/끝 시간을 지정해 장면으로 추가합니다.
+      </p>
+    </div>
 
+    <div className="flex flex-col gap-3">
+      <Field label="컷 제목">
+        <input
+          value={cutTitle}
+          onChange={(e) => setCutTitle(e.target.value)}
+          className={inputClass}
+        />
+      </Field>
+
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="시작 시간 / 초">
+          <input
+            type="number"
+            min="0"
+            step="0.1"
+            value={cutStart}
+            onChange={(e) => setCutStart(Number(e.target.value))}
+            className={inputClass}
+          />
+        </Field>
+
+        <Field label="끝 시간 / 초">
+          <input
+            type="number"
+            min="0"
+            step="0.1"
+            value={cutEnd}
+            onChange={(e) => setCutEnd(Number(e.target.value))}
+            className={inputClass}
+          />
+        </Field>
+      </div>
+
+      <button
+        onClick={addVideoCutScene}
+        className="rounded-2xl bg-purple-500 px-4 py-3 text-sm font-black text-white"
+      >
+        이 구간을 장면으로 추가
+      </button>
+    </div>
+  </div>
+)}
     if (scene.backgroundType === "sceneImage" && scene.sceneImageUrl) {
       return <img src={scene.sceneImageUrl} alt="" className="h-full w-full object-cover" />;
     }
