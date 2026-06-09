@@ -32,6 +32,8 @@ export type Scene = {
   caption: string;
   subCaption: string;
   visual: string;
+  videoClipStart?: number;
+  videoClipEnd?: number;
   effect: SceneEffect;
   backgroundType: BackgroundType;
   captionPosition: CaptionPosition;
@@ -196,15 +198,39 @@ function BackgroundVideo({
   fps: number;
 }) {
   const sceneStartFrame = Math.round(scene.start * fps);
-  const sceneFrames = Math.max(1, Math.round((scene.end - scene.start) * fps));
+
+  const durationFrames = Math.max(
+    1,
+    Math.round((scene.end - scene.start) * fps)
+  );
+
+  const clipStartFrame = Math.max(
+    0,
+    Math.round((scene.videoClipStart ?? 0) * fps)
+  );
 
   return (
-    <AbsoluteFill style={{ overflow: "hidden", backgroundColor: "#09090b" }}>
-      <Sequence from={sceneStartFrame} durationInFrames={sceneFrames}>
+    <AbsoluteFill
+      style={{
+        overflow: "hidden",
+        backgroundColor: "#09090b",
+      }}
+    >
+      <Sequence
+        from={sceneStartFrame}
+        durationInFrames={durationFrames}
+      >
         <OffthreadVideo
           src={resolveAsset(src)}
           muted
-          style={{ width: "100%", height: "100%", objectFit: "cover", ...effectStyle }}
+          startFrom={clipStartFrame}
+          endAt={clipStartFrame + durationFrames}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            ...effectStyle,
+          }}
         />
       </Sequence>
     </AbsoluteFill>
@@ -255,44 +281,99 @@ function SceneBackground({
   );
 }
 
-function CaptionLayer({ scene, frame, fps }: { scene: Scene; frame: number; fps: number }) {
-  const { frameInScene } = getSceneFrameInfo(frame, fps, scene);
+function isHighlightWord(word: string) {
+  const cleanWord = word.replace(/[^\w가-힣]/g, "");
+
+  const highlightWords = [
+    "소름",
+    "진짜",
+    "반전",
+    "충격",
+    "절대",
+    "비밀",
+    "위험",
+    "공포",
+    "실화",
+    "대박",
+    "주의",
+    "마지막",
+    "이유",
+    "정체",
+    "사실",
+    "알고보니",
+  ];
+
+  return highlightWords.some((keyword) => cleanWord.includes(keyword));
+}
+
+function CaptionLayer({
+  scene,
+  frame,
+  fps,
+}: {
+  scene: Scene;
+  frame: number;
+  fps: number;
+}) {
+  const { frameInScene, totalSceneFrames } = getSceneFrameInfo(
+    frame,
+    fps,
+    scene
+  );
+
+  const words = scene.caption.split(" ").filter(Boolean);
+  const chunkSize = words.length > 8 ? 3 : 2;
+
+  const chunks: string[][] = [];
+
+  for (let i = 0; i < words.length; i += chunkSize) {
+    chunks.push(words.slice(i, i + chunkSize));
+  }
+
+  const chunkDuration = totalSceneFrames / Math.max(chunks.length, 1);
+
+  const activeChunkIndex = Math.min(
+    chunks.length - 1,
+    Math.floor(frameInScene / chunkDuration)
+  );
+
+  const activeWords = chunks[activeChunkIndex] ?? words;
+  const chunkStartFrame = activeChunkIndex * chunkDuration;
+  const localFrame = frameInScene - chunkStartFrame;
 
   const pop = spring({
-    frame: frameInScene,
+    frame: localFrame,
     fps,
-    config: { damping: 9, stiffness: 210, mass: 0.55 },
+    config: {
+      damping: 10,
+      stiffness: 220,
+      mass: 0.6,
+    },
   });
 
-  const subPop = spring({
-    frame: frameInScene - 7,
-    fps,
-    config: { damping: 14, stiffness: 150, mass: 0.8 },
-  });
+  const scale = interpolate(pop, [0, 0.7, 1], [0.6, 1.18, 1]);
 
-  const baseScale = interpolate(pop, [0, 0.72, 1], [0.62, 1.16, 1]);
-  const opacity = interpolate(frameInScene, [0, 5, 10], [0, 1, 1], {
+  const opacity = interpolate(localFrame, [0, 3, 7], [0, 1, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
 
   const impactShake =
     scene.effect === "shake" || scene.sfxEnabled
-      ? Math.sin(frameInScene * 1.7) *
-        interpolate(frameInScene, [0, 12, 28], [10, 4, 0], {
+      ? Math.sin(localFrame * 1.8) *
+        interpolate(localFrame, [0, 10, 20], [12, 4, 0], {
           extrapolateLeft: "clamp",
           extrapolateRight: "clamp",
         })
       : 0;
 
-  const yPop = interpolate(pop, [0, 1], [28, 0]);
-  const subOpacity = interpolate(subPop, [0, 1], [0, 1]);
-  const subY = interpolate(subPop, [0, 1], [18, 0]);
-
+      
   const fontSize = getCaptionFontSize(scene.captionSize);
   const positionStyle = getCaptionPositionStyle(scene.captionPosition);
   const textColor = getTextColor(scene.captionColor);
-  const middleTransformPrefix = scene.captionPosition === "middle" ? "translateY(-50%) " : "";
+
+  const middleTransformPrefix =
+    scene.captionPosition === "middle" ? "translateY(-50%) " : "";
 
   return (
     <AbsoluteFill>
@@ -304,7 +385,7 @@ function CaptionLayer({ scene, frame, fps }: { scene: Scene; frame: number; fps:
           textAlign: "center",
           ...positionStyle,
           opacity,
-          transform: `${middleTransformPrefix}translateY(${yPop}px) translateX(${impactShake}px) scale(${baseScale})`,
+          transform: `${middleTransformPrefix}translateX(${impactShake}px) scale(${scale})`,
           transformOrigin: "center",
         }}
       >
@@ -314,20 +395,42 @@ function CaptionLayer({ scene, frame, fps }: { scene: Scene; frame: number; fps:
             maxWidth: "100%",
             padding: scene.captionBg === "dark" ? "26px 38px" : "0px",
             borderRadius: 36,
-            background: scene.captionBg === "dark" ? "rgba(0,0,0,0.68)" : "transparent",
-            color: textColor,
+            background:
+              scene.captionBg === "dark"
+                ? "rgba(0,0,0,0.72)"
+                : "transparent",
             fontSize,
             fontWeight: 950,
-            lineHeight: 1.08,
+            lineHeight: 1.12,
             letterSpacing: -2.4,
-            textShadow:
-              "0 7px 0 rgba(0,0,0,0.78), 0 12px 24px rgba(0,0,0,0.88), 0 0 2px rgba(0,0,0,1)",
+            textShadow: "0 8px 20px rgba(0,0,0,0.95)",
             wordBreak: "keep-all",
             overflowWrap: "break-word",
-            fontFamily: "Pretendard, Apple SD Gothic Neo, Noto Sans KR, Arial, sans-serif",
+            fontFamily:
+              "Pretendard, Apple SD Gothic Neo, Noto Sans KR, Arial, sans-serif",
           }}
         >
-          {scene.caption}
+          {activeWords.map((word, index) => {
+            const highlighted = isHighlightWord(word);
+
+            return (
+              <span
+                key={`${word}-${index}`}
+                style={{
+                  display: "inline-block",
+                  margin: "0 6px",
+                  color: highlighted ? "#fde047" : textColor,
+                  fontSize: highlighted ? fontSize * 1.15 : fontSize,
+                  transform: highlighted ? "rotate(-2deg) scale(1.08)" : "none",
+                  textShadow: highlighted
+                    ? "0 0 18px rgba(250,204,21,0.65), 0 8px 20px rgba(0,0,0,0.95)"
+                    : "0 8px 20px rgba(0,0,0,0.95)",
+                }}
+              >
+                {word}
+              </span>
+            );
+          })}
         </div>
 
         {scene.subCaption ? (
@@ -342,9 +445,10 @@ function CaptionLayer({ scene, frame, fps }: { scene: Scene; frame: number; fps:
               fontSize: 27,
               fontWeight: 900,
               lineHeight: 1.2,
-              opacity: subOpacity,
-              transform: `translateY(${subY}px)`,
-              fontFamily: "Pretendard, Apple SD Gothic Neo, Noto Sans KR, Arial, sans-serif",
+              opacity: interpolate(pop, [0, 1], [0, 1]),
+              transform: `translateY(${interpolate(pop, [0, 1], [18, 0])}px)`,
+              fontFamily:
+                "Pretendard, Apple SD Gothic Neo, Noto Sans KR, Arial, sans-serif",
             }}
           >
             {scene.subCaption}
