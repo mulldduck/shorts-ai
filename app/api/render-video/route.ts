@@ -58,8 +58,10 @@ type RenderRequestBody = {
   uploadedImageUrl?: string;
   uploadedVideoUrl?: string;
   bgmUrl?: string;
+  narrationUrl?: string;
   sfxUrl?: string;
   bgmVolume?: number;
+  narrationVolume?: number;
   sfxVolume?: number;
 };
 
@@ -74,15 +76,11 @@ function sanitizeFileName(value: string) {
 }
 
 function getTotalDuration(scenes: Scene[]) {
-  if (!Array.isArray(scenes) || scenes.length === 0) {
-    return 8;
-  }
+  if (!Array.isArray(scenes) || scenes.length === 0) return 8;
 
   const maxEnd = Math.max(...scenes.map((scene) => Number(scene.end || 0)));
 
-  if (!Number.isFinite(maxEnd) || maxEnd <= 0) {
-    return 8;
-  }
+  if (!Number.isFinite(maxEnd) || maxEnd <= 0) return 8;
 
   return maxEnd;
 }
@@ -178,6 +176,11 @@ function normalizeScene(scene: Partial<Scene>, index: number): Scene {
   };
 }
 
+function normalizeVolume(value: unknown, fallback: number) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  return Math.min(Math.max(value, 0), 1);
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as RenderRequestBody;
@@ -187,9 +190,7 @@ export async function POST(request: Request) {
 
     if (scenes.length === 0) {
       return NextResponse.json(
-        {
-          error: "렌더링할 장면이 없습니다.",
-        },
+        { error: "렌더링할 장면이 없습니다." },
         { status: 400 }
       );
     }
@@ -208,15 +209,11 @@ export async function POST(request: Request) {
       uploadedImageUrl: body.uploadedImageUrl ?? "",
       uploadedVideoUrl: body.uploadedVideoUrl ?? "",
       bgmUrl: body.bgmUrl ?? "",
+      narrationUrl: body.narrationUrl ?? "",
       sfxUrl: body.sfxUrl ?? "",
-      bgmVolume:
-        typeof body.bgmVolume === "number" && Number.isFinite(body.bgmVolume)
-          ? body.bgmVolume
-          : 0.35,
-      sfxVolume:
-        typeof body.sfxVolume === "number" && Number.isFinite(body.sfxVolume)
-          ? body.sfxVolume
-          : 0.7,
+      bgmVolume: normalizeVolume(body.bgmVolume, 0.25),
+      narrationVolume: normalizeVolume(body.narrationVolume, 1),
+      sfxVolume: normalizeVolume(body.sfxVolume, 0.7),
     };
 
     const entryPoint = path.join(process.cwd(), "remotion", "index.tsx");
@@ -236,9 +233,7 @@ export async function POST(request: Request) {
 
     if (!composition) {
       return NextResponse.json(
-        {
-          error: "ShortsLabVideo 컴포지션을 찾을 수 없습니다.",
-        },
+        { error: "ShortsLabVideo 컴포지션을 찾을 수 없습니다." },
         { status: 500 }
       );
     }
@@ -269,9 +264,7 @@ export async function POST(request: Request) {
     console.error("render-video route error:", error);
 
     return NextResponse.json(
-      {
-        error: "MP4 렌더링 중 오류가 발생했습니다.",
-      },
+      { error: "MP4 렌더링 중 오류가 발생했습니다." },
       { status: 500 }
     );
   }

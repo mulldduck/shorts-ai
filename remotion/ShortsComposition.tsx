@@ -1,8 +1,13 @@
+import type React from "react";
 import {
   AbsoluteFill,
+  Audio,
   Img,
+  OffthreadVideo,
+  Sequence,
   interpolate,
   spring,
+  staticFile,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
@@ -12,7 +17,6 @@ type CaptionSize = "small" | "medium" | "large";
 type CaptionColor = "white" | "yellow" | "red" | "purple";
 type CaptionBg = "none" | "dark";
 type SceneEffect = "zoom" | "shake" | "fade" | "slide" | "none";
-
 type BackgroundType =
   | "solid"
   | "uploadedImage"
@@ -20,7 +24,6 @@ type BackgroundType =
   | "generatedImage"
   | "sceneImage"
   | "sceneVideo";
-
 type SfxTiming = "sceneStart" | "impact" | "none";
 
 export type Scene = {
@@ -62,8 +65,10 @@ export type ShortsCompositionProps = {
   uploadedImageUrl?: string;
   uploadedVideoUrl?: string;
   bgmUrl?: string;
+  narrationUrl?: string;
   sfxUrl?: string;
   bgmVolume?: number;
+  narrationVolume?: number;
   sfxVolume?: number;
 };
 
@@ -84,65 +89,37 @@ const fallbackScene: Scene = {
   sfxTiming: "none",
 };
 
-function getTextColor(color: CaptionColor) {
-  switch (color) {
-    case "white":
-      return "#ffffff";
-    case "yellow":
-      return "#fde047";
-    case "red":
-      return "#f87171";
-    case "purple":
-      return "#d8b4fe";
-    default:
-      return "#ffffff";
+function resolveAsset(src?: string) {
+  if (!src) return "";
+  if (src.startsWith("data:") || src.startsWith("http://") || src.startsWith("https://")) {
+    return src;
   }
+  if (src.startsWith("/")) return staticFile(src.replace(/^\//, ""));
+  return src;
+}
+
+function getTextColor(color: CaptionColor) {
+  if (color === "yellow") return "#fde047";
+  if (color === "red") return "#f87171";
+  if (color === "purple") return "#d8b4fe";
+  return "#ffffff";
 }
 
 function getCaptionFontSize(size: CaptionSize) {
-  switch (size) {
-    case "small":
-      return 46;
-    case "medium":
-      return 58;
-    case "large":
-      return 72;
-    default:
-      return 58;
-  }
+  if (size === "small") return 46;
+  if (size === "large") return 72;
+  return 58;
 }
 
 function getCaptionPositionStyle(position: CaptionPosition): React.CSSProperties {
-  switch (position) {
-    case "top":
-      return {
-        top: 110,
-      };
-    case "upper":
-      return {
-        top: 300,
-      };
-    case "middle":
-      return {
-        top: "50%",
-        transform: "translateY(-50%)",
-      };
-    case "lower":
-      return {
-        bottom: 300,
-      };
-    case "bottom":
-      return {
-        bottom: 120,
-      };
-    default:
-      return {
-        bottom: 120,
-      };
-  }
+  if (position === "top") return { top: 110 };
+  if (position === "upper") return { top: 300 };
+  if (position === "middle") return { top: "50%", transform: "translateY(-50%)" };
+  if (position === "lower") return { bottom: 300 };
+  return { bottom: 120 };
 }
 
-function getSceneProgress(frame: number, fps: number, scene: Scene) {
+function getSceneFrameInfo(frame: number, fps: number, scene: Scene) {
   const sceneStartFrame = Math.round(scene.start * fps);
   const sceneEndFrame = Math.round(scene.end * fps);
   const totalSceneFrames = Math.max(1, sceneEndFrame - sceneStartFrame);
@@ -157,49 +134,32 @@ function getSceneProgress(frame: number, fps: number, scene: Scene) {
   };
 }
 
-function getEffectStyle(
-  effect: SceneEffect,
-  frame: number,
-  fps: number,
-  scene: Scene
-): React.CSSProperties {
-  const { progress, frameInScene } = getSceneProgress(frame, fps, scene);
+function getEffectStyle(effect: SceneEffect, frame: number, fps: number, scene: Scene): React.CSSProperties {
+  const { progress, frameInScene } = getSceneFrameInfo(frame, fps, scene);
 
   if (effect === "zoom") {
     const scale = interpolate(progress, [0, 1], [1, 1.14]);
-    return {
-      transform: `scale(${scale})`,
-    };
+    return { transform: `scale(${scale})` };
   }
 
   if (effect === "shake") {
     const power = interpolate(progress, [0, 0.25, 1], [10, 5, 0]);
     const x = Math.sin(frameInScene * 1.8) * power;
     const y = Math.cos(frameInScene * 1.5) * power;
-
-    return {
-      transform: `translate(${x}px, ${y}px) scale(1.06)`,
-    };
+    return { transform: `translate(${x}px, ${y}px) scale(1.06)` };
   }
 
   if (effect === "fade") {
     const opacity = interpolate(progress, [0, 0.18, 1], [0.3, 1, 1]);
-    return {
-      opacity,
-      transform: "scale(1.04)",
-    };
+    return { opacity, transform: "scale(1.04)" };
   }
 
   if (effect === "slide") {
     const x = interpolate(progress, [0, 0.2, 1], [80, 0, 0]);
-    return {
-      transform: `translateX(${x}px) scale(1.05)`,
-    };
+    return { transform: `translateX(${x}px) scale(1.05)` };
   }
 
-  return {
-    transform: "scale(1.03)",
-  };
+  return { transform: "scale(1.03)" };
 }
 
 function SolidBackground() {
@@ -209,41 +169,44 @@ function SolidBackground() {
         background:
           "linear-gradient(135deg, #09090b 0%, #18181b 36%, #4c1d95 72%, #111827 100%)",
       }}
-    >
-      <AbsoluteFill
-        style={{
-          background:
-            "radial-gradient(circle at 50% 28%, rgba(255,255,255,0.18), transparent 42%)",
-        }}
-      />
-      <AbsoluteFill
-        style={{
-          background:
-            "radial-gradient(circle at 20% 78%, rgba(168,85,247,0.28), transparent 34%)",
-        }}
+    />
+  );
+}
+
+function BackgroundImage({ src, effectStyle }: { src: string; effectStyle: React.CSSProperties }) {
+  return (
+    <AbsoluteFill style={{ overflow: "hidden", backgroundColor: "#09090b" }}>
+      <Img
+        src={resolveAsset(src)}
+        style={{ width: "100%", height: "100%", objectFit: "cover", ...effectStyle }}
       />
     </AbsoluteFill>
   );
 }
 
-function BackgroundImage({
+function BackgroundVideo({
   src,
   effectStyle,
+  scene,
+  fps,
 }: {
   src: string;
   effectStyle: React.CSSProperties;
+  scene: Scene;
+  fps: number;
 }) {
+  const sceneStartFrame = Math.round(scene.start * fps);
+  const sceneFrames = Math.max(1, Math.round((scene.end - scene.start) * fps));
+
   return (
     <AbsoluteFill style={{ overflow: "hidden", backgroundColor: "#09090b" }}>
-      <Img
-        src={src}
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          ...effectStyle,
-        }}
-      />
+      <Sequence from={sceneStartFrame} durationInFrames={sceneFrames}>
+        <OffthreadVideo
+          src={resolveAsset(src)}
+          muted
+          style={{ width: "100%", height: "100%", objectFit: "cover", ...effectStyle }}
+        />
+      </Sequence>
     </AbsoluteFill>
   );
 }
@@ -251,24 +214,32 @@ function BackgroundImage({
 function SceneBackground({
   scene,
   uploadedImageUrl,
+  uploadedVideoUrl,
   frame,
   fps,
 }: {
   scene: Scene;
   uploadedImageUrl?: string;
+  uploadedVideoUrl?: string;
   frame: number;
   fps: number;
 }) {
   const effectStyle = getEffectStyle(scene.effect, frame, fps, scene);
+
+  if (scene.backgroundType === "sceneVideo" && scene.sceneVideoUrl) {
+    return <BackgroundVideo src={scene.sceneVideoUrl} effectStyle={effectStyle} scene={scene} fps={fps} />;
+  }
+
+  if (scene.backgroundType === "uploadedVideo" && uploadedVideoUrl) {
+    return <BackgroundVideo src={uploadedVideoUrl} effectStyle={effectStyle} scene={scene} fps={fps} />;
+  }
 
   if (scene.backgroundType === "generatedImage" && scene.imageUrl) {
     return <BackgroundImage src={scene.imageUrl} effectStyle={effectStyle} />;
   }
 
   if (scene.backgroundType === "sceneImage" && scene.sceneImageUrl) {
-    return (
-      <BackgroundImage src={scene.sceneImageUrl} effectStyle={effectStyle} />
-    );
+    return <BackgroundImage src={scene.sceneImageUrl} effectStyle={effectStyle} />;
   }
 
   if (scene.backgroundType === "uploadedImage" && uploadedImageUrl) {
@@ -277,61 +248,63 @@ function SceneBackground({
 
   return (
     <AbsoluteFill style={{ overflow: "hidden" }}>
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          ...effectStyle,
-        }}
-      >
+      <div style={{ width: "100%", height: "100%", ...effectStyle }}>
         <SolidBackground />
       </div>
     </AbsoluteFill>
   );
 }
 
-function CaptionLayer({
-  scene,
-  frame,
-  fps,
-}: {
-  scene: Scene;
-  frame: number;
-  fps: number;
-}) {
-  const { frameInScene } = getSceneProgress(frame, fps, scene);
+function CaptionLayer({ scene, frame, fps }: { scene: Scene; frame: number; fps: number }) {
+  const { frameInScene } = getSceneFrameInfo(frame, fps, scene);
 
-  const entrance = spring({
+  const pop = spring({
     frame: frameInScene,
     fps,
-    config: {
-      damping: 16,
-      stiffness: 160,
-      mass: 0.8,
-    },
+    config: { damping: 9, stiffness: 210, mass: 0.55 },
   });
 
-  const scale = interpolate(entrance, [0, 1], [0.88, 1]);
-  const opacity = interpolate(entrance, [0, 1], [0, 1]);
+  const subPop = spring({
+    frame: frameInScene - 7,
+    fps,
+    config: { damping: 14, stiffness: 150, mass: 0.8 },
+  });
+
+  const baseScale = interpolate(pop, [0, 0.72, 1], [0.62, 1.16, 1]);
+  const opacity = interpolate(frameInScene, [0, 5, 10], [0, 1, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  const impactShake =
+    scene.effect === "shake" || scene.sfxEnabled
+      ? Math.sin(frameInScene * 1.7) *
+        interpolate(frameInScene, [0, 12, 28], [10, 4, 0], {
+          extrapolateLeft: "clamp",
+          extrapolateRight: "clamp",
+        })
+      : 0;
+
+  const yPop = interpolate(pop, [0, 1], [28, 0]);
+  const subOpacity = interpolate(subPop, [0, 1], [0, 1]);
+  const subY = interpolate(subPop, [0, 1], [18, 0]);
 
   const fontSize = getCaptionFontSize(scene.captionSize);
   const positionStyle = getCaptionPositionStyle(scene.captionPosition);
   const textColor = getTextColor(scene.captionColor);
+  const middleTransformPrefix = scene.captionPosition === "middle" ? "translateY(-50%) " : "";
 
   return (
     <AbsoluteFill>
       <div
         style={{
           position: "absolute",
-          left: 64,
-          right: 64,
+          left: 58,
+          right: 58,
           textAlign: "center",
           ...positionStyle,
           opacity,
-          transform:
-            scene.captionPosition === "middle"
-              ? `translateY(-50%) scale(${scale})`
-              : `scale(${scale})`,
+          transform: `${middleTransformPrefix}translateY(${yPop}px) translateX(${impactShake}px) scale(${baseScale})`,
           transformOrigin: "center",
         }}
       >
@@ -339,21 +312,19 @@ function CaptionLayer({
           style={{
             display: "inline-block",
             maxWidth: "100%",
-            padding: scene.captionBg === "dark" ? "24px 34px" : "0px",
-            borderRadius: 34,
-            background:
-              scene.captionBg === "dark" ? "rgba(0,0,0,0.64)" : "transparent",
+            padding: scene.captionBg === "dark" ? "26px 38px" : "0px",
+            borderRadius: 36,
+            background: scene.captionBg === "dark" ? "rgba(0,0,0,0.68)" : "transparent",
             color: textColor,
             fontSize,
-            fontWeight: 900,
-            lineHeight: 1.15,
-            letterSpacing: -2,
+            fontWeight: 950,
+            lineHeight: 1.08,
+            letterSpacing: -2.4,
             textShadow:
-              "0 5px 18px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.9)",
+              "0 7px 0 rgba(0,0,0,0.78), 0 12px 24px rgba(0,0,0,0.88), 0 0 2px rgba(0,0,0,1)",
             wordBreak: "keep-all",
             overflowWrap: "break-word",
-            fontFamily:
-              "Pretendard, Apple SD Gothic Neo, Noto Sans KR, Arial, sans-serif",
+            fontFamily: "Pretendard, Apple SD Gothic Neo, Noto Sans KR, Arial, sans-serif",
           }}
         >
           {scene.caption}
@@ -363,17 +334,17 @@ function CaptionLayer({
           <div
             style={{
               display: "inline-block",
-              marginTop: 20,
-              padding: "11px 22px",
+              marginTop: 22,
+              padding: "12px 24px",
               borderRadius: 999,
-              background: "rgba(0,0,0,0.58)",
-              color: "#ffffff",
-              fontSize: 28,
-              fontWeight: 800,
+              background: "rgba(255,255,255,0.92)",
+              color: "#09090b",
+              fontSize: 27,
+              fontWeight: 900,
               lineHeight: 1.2,
-              textShadow: "0 3px 12px rgba(0,0,0,0.8)",
-              fontFamily:
-                "Pretendard, Apple SD Gothic Neo, Noto Sans KR, Arial, sans-serif",
+              opacity: subOpacity,
+              transform: `translateY(${subY}px)`,
+              fontFamily: "Pretendard, Apple SD Gothic Neo, Noto Sans KR, Arial, sans-serif",
             }}
           >
             {scene.subCaption}
@@ -384,62 +355,51 @@ function CaptionLayer({
   );
 }
 
-function SceneIndicator({
-  sceneIndex,
-  totalScenes,
+function AudioLayers({
+  scenes,
+  bgmUrl,
+  narrationUrl,
+  sfxUrl,
+  bgmVolume = 0.25,
+  narrationVolume = 1,
+  sfxVolume = 0.7,
+  fps,
 }: {
-  sceneIndex: number;
-  totalScenes: number;
+  scenes: Scene[];
+  bgmUrl?: string;
+  narrationUrl?: string;
+  sfxUrl?: string;
+  bgmVolume?: number;
+  narrationVolume?: number;
+  sfxVolume?: number;
+  fps: number;
 }) {
   return (
-    <div
-      style={{
-        position: "absolute",
-        top: 42,
-        left: 42,
-        padding: "10px 18px",
-        borderRadius: 999,
-        background: "rgba(0,0,0,0.48)",
-        color: "#ffffff",
-        fontSize: 22,
-        fontWeight: 800,
-        fontFamily:
-          "Pretendard, Apple SD Gothic Neo, Noto Sans KR, Arial, sans-serif",
-      }}
-    >
-      Scene {sceneIndex + 1}/{totalScenes}
-    </div>
-  );
-}
+    <>
+      {bgmUrl ? <Audio src={resolveAsset(bgmUrl)} volume={bgmVolume} loop /> : null}
 
-function ProgressBar({
-  frame,
-  totalFrames,
-}: {
-  frame: number;
-  totalFrames: number;
-}) {
-  const width = `${Math.min(Math.max(frame / totalFrames, 0), 1) * 100}%`;
+      {narrationUrl ? (
+        <Audio src={resolveAsset(narrationUrl)} volume={narrationVolume} />
+      ) : null}
 
-  return (
-    <div
-      style={{
-        position: "absolute",
-        left: 0,
-        right: 0,
-        bottom: 0,
-        height: 10,
-        background: "rgba(255,255,255,0.22)",
-      }}
-    >
-      <div
-        style={{
-          height: "100%",
-          width,
-          background: "#a855f7",
-        }}
-      />
-    </div>
+      {sfxUrl
+        ? scenes.map((scene, index) => {
+            if (!scene.sfxEnabled) return null;
+            if (!scene.sfxTiming || scene.sfxTiming === "none") return null;
+
+            const from =
+              scene.sfxTiming === "impact"
+                ? Math.round((scene.start + (scene.end - scene.start) * 0.45) * fps)
+                : Math.round(scene.start * fps);
+
+            return (
+              <Sequence key={`sfx-${index}-${from}`} from={from} durationInFrames={90}>
+                <Audio src={resolveAsset(sfxUrl)} volume={sfxVolume} />
+              </Sequence>
+            );
+          })
+        : null}
+    </>
   );
 }
 
@@ -447,6 +407,13 @@ export function ShortsComposition({
   title = "쇼츠랩 AI 영상",
   scenes = [fallbackScene],
   uploadedImageUrl,
+  uploadedVideoUrl,
+  bgmUrl,
+  narrationUrl,
+  sfxUrl,
+  bgmVolume = 0.25,
+  narrationVolume = 1,
+  sfxVolume = 0.7,
 }: ShortsCompositionProps) {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
@@ -459,9 +426,7 @@ export function ShortsComposition({
     return frame >= startFrame && frame < endFrame;
   });
 
-  const resolvedSceneIndex =
-    currentSceneIndex === -1 ? safeScenes.length - 1 : currentSceneIndex;
-
+  const resolvedSceneIndex = currentSceneIndex === -1 ? safeScenes.length - 1 : currentSceneIndex;
   const currentScene = safeScenes[resolvedSceneIndex] ?? fallbackScene;
 
   return (
@@ -469,6 +434,7 @@ export function ShortsComposition({
       <SceneBackground
         scene={currentScene}
         uploadedImageUrl={uploadedImageUrl}
+        uploadedVideoUrl={uploadedVideoUrl}
         frame={frame}
         fps={fps}
       />
@@ -482,10 +448,22 @@ export function ShortsComposition({
 
       <CaptionLayer scene={currentScene} frame={frame} fps={fps} />
 
-      <SceneIndicator
-        sceneIndex={resolvedSceneIndex}
-        totalScenes={safeScenes.length}
-      />
+      <div
+        style={{
+          position: "absolute",
+          top: 42,
+          left: 42,
+          padding: "10px 18px",
+          borderRadius: 999,
+          background: "rgba(0,0,0,0.48)",
+          color: "#ffffff",
+          fontSize: 22,
+          fontWeight: 800,
+          fontFamily: "Pretendard, Apple SD Gothic Neo, Noto Sans KR, Arial, sans-serif",
+        }}
+      >
+        Scene {resolvedSceneIndex + 1}/{safeScenes.length}
+      </div>
 
       <div
         style={{
@@ -503,14 +481,41 @@ export function ShortsComposition({
           whiteSpace: "nowrap",
           overflow: "hidden",
           textOverflow: "ellipsis",
-          fontFamily:
-            "Pretendard, Apple SD Gothic Neo, Noto Sans KR, Arial, sans-serif",
+          fontFamily: "Pretendard, Apple SD Gothic Neo, Noto Sans KR, Arial, sans-serif",
         }}
       >
         {title}
       </div>
 
-      <ProgressBar frame={frame} totalFrames={durationInFrames} />
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          height: 10,
+          background: "rgba(255,255,255,0.22)",
+        }}
+      >
+        <div
+          style={{
+            height: "100%",
+            width: `${Math.min(Math.max(frame / durationInFrames, 0), 1) * 100}%`,
+            background: "#a855f7",
+          }}
+        />
+      </div>
+
+      <AudioLayers
+        scenes={safeScenes}
+        bgmUrl={bgmUrl}
+        narrationUrl={narrationUrl}
+        sfxUrl={sfxUrl}
+        bgmVolume={bgmVolume}
+        narrationVolume={narrationVolume}
+        sfxVolume={sfxVolume}
+        fps={fps}
+      />
     </AbsoluteFill>
   );
 }
