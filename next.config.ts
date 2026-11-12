@@ -10,6 +10,14 @@ const nextConfig: NextConfig = {
     "@rspack/core",
     "esbuild",
   ],
+  async rewrites() {
+    return [
+      {
+        source: "/stage-plan",
+        destination: "/stage-plan/index.html",
+      },
+    ];
+  },
 };
 
 export default nextConfig;
